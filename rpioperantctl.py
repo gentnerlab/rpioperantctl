@@ -322,10 +322,10 @@ def main():
         process_df, is_magpi=args.is_magpi
     )
     # start/kill processes
-    if args.s:
-        start_behaviors(processes_to_start, is_magpi=args.is_magpi)
     if args.k:
         kill_behaviors(processes_to_kill, is_magpi=args.is_magpi)
+    if args.s:
+        start_behaviors(processes_to_start, is_magpi=args.is_magpi)
     return
 
 
