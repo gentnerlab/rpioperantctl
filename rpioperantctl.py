@@ -5,6 +5,7 @@ import subprocess
 import pandas as pd
 import numpy as np
 import argparse
+import time
 
 
 def ssh_magpi(server="magpi01", is_magpi=False):
@@ -16,7 +17,7 @@ def ssh_magpi(server="magpi01", is_magpi=False):
     if is_magpi:
         # ssh into magpi rpi
         sshProcess = subprocess.Popen(
-            ["ssh", server],
+            ["ssh", "-T", server],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             universal_newlines=True,
@@ -45,7 +46,7 @@ def get_panel_subject_behavior(
     """ gets panel subject behavior from magpi serverpsb_loc
     """
     if is_magpi:
-        command = (["cat", psb_loc],)
+        command = ["cat", psb_loc]
 
     else:
         command = ["ssh", "bird@magpi", "cat", psb_loc]
@@ -234,17 +235,25 @@ def start_behaviors(processes_to_start, is_magpi=False):
         sshProcess = ssh_magpi(server=server, is_magpi=is_magpi)
 
         # search for python processes
-        command = "nohup /home/bird/pyoperant/scripts/" + row.command + ' &'
-        print(command)
+        command = "nohup /home/bird/pyoperant/scripts/" + row.command + " &"
+        # print(command)
         sshProcess.stdin.write(command)
+
+        # make sure the process is running
+        # time.sleep(.25)
 
         # close connection
         sshProcess.stdin.close()
 
-        # get output of commands
-        #out = sshProcess.stdout.readlines()
+        # make sure command is running
+        rc = find_running_commands(server, process=row.command, is_magpi=is_magpi)
+        if len(rc) > 1:
+            print("Start failed")
 
-        #for line in out:
+        # get output of commands
+        # out = sshProcess.stdout.readlines()
+
+        # for line in out:
         #    print(line)
 
 
@@ -302,15 +311,17 @@ def get_args():
 
 
 def main():
+    # parse arguments
     args = get_args()
-    print(args)
-
+    # retrieve panel subject behavior
     psb = get_panel_subject_behavior(psb_loc=args.psb_loc, is_magpi=args.is_magpi)
+    # parse panel subject behavior
     process_df = parse_panel_subject_behavior(psb)
+    # find running processes, compare to panel_subject_behavior
     processes_to_kill, processes_to_start = pyoperantctl(
         process_df, is_magpi=args.is_magpi
     )
-
+    # start/kill processes
     if args.s:
         start_behaviors(processes_to_start, is_magpi=args.is_magpi)
     if args.k:
