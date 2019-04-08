@@ -158,7 +158,7 @@ def pyoperantctl(process_df, is_magpi=False):
                     row.behavior,
                 ]
 
-        # if there should not be a process running
+        # if the process should not be a process running
         elif row.enabled == "0":
             # if behavior running and should not be, kill it
             if row.behavior in processes_formatted:
@@ -191,9 +191,10 @@ def pyoperantctl(process_df, is_magpi=False):
         for pi, process in enumerate(processes_formatted):
             # if the wrong behavior process is running it needs to be killed
             if process != row.behavior:
+                PID = running_processes[pi].split()[1]
                 print(
-                    "Panel {} | Process needs to be killed: {}".format(
-                        row.panel, row.behavior
+                    "Panel {} | Process needs to be killed: {} | PID: {}".format(
+                        row.panel, process, PID
                     )
                 )
                 # add process to list of processes to kill
