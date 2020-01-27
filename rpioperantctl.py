@@ -123,9 +123,7 @@ def pyoperantctl(process_df, is_magpi=False):
 
         # find all running behavioral processes on magpi
         running_processes = find_running_commands(
-            "magpi" + str(row.panel).zfill(2),
-            process="pyoperant/scripts/behave",
-            is_magpi=is_magpi,
+            str(row.panel), process="pyoperant/scripts/behave", is_magpi=is_magpi,
         )
 
         # format processes to the same as in panel_subject_behavior
@@ -210,12 +208,10 @@ def pyoperantctl(process_df, is_magpi=False):
 def kill_behaviors(processes_to_kill, is_magpi=False):
     for idx, row in processes_to_kill.iterrows():
         for pid in row.PID:
-            server = "magpi" + str(row.Magpi).zfill(2)
+            server = str(row.Magpi)
             print('Killing "{}" at {} in {}'.format(row.command, pid, server))
             # ssh into magpi
-            sshProcess = ssh_magpi(
-                server="magpi" + str(row.Magpi).zfill(2), is_magpi=is_magpi
-            )
+            sshProcess = ssh_magpi(serverserver, is_magpi=is_magpi)
 
             # search for python processes
             print("kill {}".format(pid))
@@ -230,7 +226,7 @@ def kill_behaviors(processes_to_kill, is_magpi=False):
 
 def start_behaviors(processes_to_start, is_magpi=False):
     for idx, row in processes_to_start.iterrows():
-        server = "magpi" + str(row.Magpi).zfill(2)
+        server = str(row.Magpi)
         print('Starting "{}" in {}'.format(row.command, server))
         # ssh into magpi
         sshProcess = ssh_magpi(server=server, is_magpi=is_magpi)
