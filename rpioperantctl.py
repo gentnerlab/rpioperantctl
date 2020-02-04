@@ -211,7 +211,7 @@ def kill_behaviors(processes_to_kill, is_magpi=False):
             server = str(row.Magpi)
             print('Killing "{}" at {} in {}'.format(row.command, pid, server))
             # ssh into magpi
-            sshProcess = ssh_magpi(serverserver, is_magpi=is_magpi)
+            sshProcess = ssh_magpi(server, is_magpi=is_magpi)
 
             # search for python processes
             print("kill {}".format(pid))
