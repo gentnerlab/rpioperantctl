@@ -17,9 +17,10 @@ def ssh_magpi(server="magpi01", is_magpi=False):
     if is_magpi:
         # ssh into magpi rpi
         sshProcess = subprocess.Popen(
-            ["ssh", "-T", server],
+            ["ssh", "-o", "ConnectTimeout=5", "-T", server],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             universal_newlines=True,
             bufsize=0,
         )
@@ -27,15 +28,16 @@ def ssh_magpi(server="magpi01", is_magpi=False):
     else:
         # ssh into magpi server
         sshProcess = subprocess.Popen(
-            ["ssh", "-T", "bird@magpi"],
+            ["ssh", "-o", "ConnectTimeout=5", "-T", "bird@magpi"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             universal_newlines=True,
             bufsize=0,
         )
 
         # ssh into specific magpi
-        sshProcess.stdin.write("ssh -T " + server + "\n")
+        sshProcess.stdin.write("ssh -o ConnectTimeout=5 -T " + server + "\n")
 
     return sshProcess
 
@@ -89,6 +91,14 @@ def find_running_commands(server, process, user="bird", is_magpi=False):
 
     # get output of commands
     out = sshProcess.stdout.readlines()
+    err = sshProcess.stderr.read()
+    returncode = sshProcess.wait()
+
+    if returncode != 0:
+        # SSH itself failed (unreachable, timed out, etc.) -- distinct from
+        # a successful connection that just found nothing running
+        print("Panel {} | SSH connection failed: {}".format(server, err.strip()))
+        return None
 
     # subset output of sshprocess to what is returned by ps -ef
     commands = []
@@ -125,6 +135,13 @@ def pyoperantctl(process_df, is_magpi=False):
         running_processes = find_running_commands(
             str(row.panel), process="pyoperant/scripts/behave", is_magpi=is_magpi,
         )
+
+        # if the SSH connection itself failed, we have no reliable info about
+        # this panel -- skip it rather than treating "unknown" the same as
+        # "confirmed not running"
+        if running_processes is None:
+            print("Panel {} | Unreachable, skipping".format(row.panel))
+            continue
 
         # format processes to the same as in panel_subject_behavior
         processes_formatted = [
