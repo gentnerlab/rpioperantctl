@@ -237,7 +237,7 @@ def start_behaviors(processes_to_start, is_magpi=False):
         sshProcess.stdin.write(command)
 
         # make sure the process is running
-        # time.sleep(.25)
+        time.sleep(.25)
 
         # close connection
         sshProcess.stdin.close()
