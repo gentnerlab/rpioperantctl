@@ -244,7 +244,7 @@ def start_behaviors(processes_to_start, is_magpi=False):
 
         # make sure command is running
         rc = find_running_commands(server, process=row.command, is_magpi=is_magpi)
-        if len(rc) > 1:
+        if len(rc) == 0:
             print("Start failed")
 
         # get output of commands
