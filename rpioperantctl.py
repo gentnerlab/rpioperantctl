@@ -6,6 +6,9 @@ import pandas as pd
 import numpy as np
 import argparse
 import time
+import json
+
+OPDAT_ROOT = "/home/bird/opdat/"
 
 
 def ssh_magpi(server="magpi01", is_magpi=False):
@@ -120,6 +123,61 @@ def find_behavior_PID(behavior, processes_formatted, running_processes):
         i.split()[1]
         for i in np.array(running_processes)[behavior == np.array(processes_formatted)]
     ]
+
+
+def get_stim_exclude(server, subj, is_magpi=False):
+    """SSH into a panel and read its subject's config.json to resolve the
+    real stim_path (explicit, or pyoperant's own default of
+    <experiment_path>/stims -- see pyoperant.behavior.base.BaseExp.__init__),
+    returning it as a path relative to opdat/'s root for allsummary.py to
+    use as an exact rsync --exclude, rather than allsummary.py having to
+    guess from directory names or do its own SSH round-trip per box.
+
+    Returns None if the config can't be read (panel unreachable, no
+    config.json -- e.g. a lights/shape panel) or the subject's stim_path
+    isn't under opdat/ at all.
+    """
+    sshProcess = ssh_magpi(server=server, is_magpi=is_magpi)
+    remote_config = "{}{}/config.json".format(OPDAT_ROOT, subj)
+    sshProcess.stdin.write("cat {}\n".format(remote_config))
+    sshProcess.stdin.close()
+
+    out = sshProcess.stdout.read()
+    sshProcess.stderr.read()
+    returncode = sshProcess.wait()
+
+    if returncode != 0 or not out.strip():
+        return None
+    try:
+        config = json.loads(out)
+    except json.JSONDecodeError:
+        return None
+
+    experiment_path = config.get("experiment_path") or "{}{}".format(OPDAT_ROOT, subj)
+    stim_path = config.get("stim_path") or (experiment_path.rstrip("/") + "/stims")
+
+    if stim_path.startswith(OPDAT_ROOT):
+        return "/" + stim_path[len(OPDAT_ROOT):]
+    return None  # stim_path lives outside opdat/, nothing to exclude here
+
+
+def get_stim_excludes(process_df, is_magpi=False):
+    """ resolves every panel's real stim exclude path via get_stim_exclude,
+    piggybacking on the per-panel SSH access rpioperantctl already has,
+    so allsummary.py doesn't need to open its own connections just to
+    figure out what to exclude from its rsync pull.
+    """
+    rows = []
+    for idx, row in process_df.iterrows():
+        stim_exclude = get_stim_exclude(str(row.panel), row.subj, is_magpi=is_magpi)
+        rows.append((row.panel, row.subj, stim_exclude or ""))
+    return rows
+
+
+def write_stim_excludes(rows, out_loc="/home/bird/opdat/panel_stim_excludes"):
+    with open(out_loc, "w") as f:
+        for panel, subj, stim_exclude in rows:
+            f.write("{}\t{}\t{}\n".format(panel, subj, stim_exclude))
 
 
 def pyoperantctl(process_df, is_magpi=False):
@@ -321,6 +379,14 @@ def get_args():
         default="/home/bird/opdat/panel_subject_behavior",
     )
 
+    parser.add_argument(
+        "-stim_excludes_loc",
+        dest="stim_excludes_loc",
+        type=str,
+        default="/home/bird/opdat/panel_stim_excludes",
+        help="where to write each panel's resolved stim-dir rsync exclude, for allsummary.py to read",
+    )
+
     return parser.parse_args()
 
 
@@ -340,6 +406,9 @@ def main():
         kill_behaviors(processes_to_kill, is_magpi=args.is_magpi)
     if args.s:
         start_behaviors(processes_to_start, is_magpi=args.is_magpi)
+    # refresh each panel's resolved stim-dir exclude for allsummary.py
+    stim_excludes = get_stim_excludes(process_df, is_magpi=args.is_magpi)
+    write_stim_excludes(stim_excludes, out_loc=args.stim_excludes_loc)
     return
 
 
