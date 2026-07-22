@@ -125,7 +125,7 @@ def find_behavior_PID(behavior, processes_formatted, running_processes):
     ]
 
 
-def get_stim_exclude(server, subj, is_magpi=False):
+def get_stim_exclude(server, subj, is_magpi=False, timeout=5):
     """SSH into a panel and read its subject's config.json to resolve the
     real stim_path (explicit, or pyoperant's own default of
     <experiment_path>/stims -- see pyoperant.behavior.base.BaseExp.__init__),
@@ -133,23 +133,33 @@ def get_stim_exclude(server, subj, is_magpi=False):
     use as an exact rsync --exclude, rather than allsummary.py having to
     guess from directory names or do its own SSH round-trip per box.
 
+    Runs the remote `cat` as an explicit ssh argv command (not via
+    ssh_magpi()'s interactive-shell stdin-write pattern used elsewhere in
+    this file) -- with no command given, `ssh -T` starts an interactive
+    login shell, and its prompt/banner/echoed-input text gets mixed into
+    stdout, which breaks a strict json.loads() on the result even though
+    the process list parsing other functions do tolerates that noise fine.
+
     Returns None if the config can't be read (panel unreachable, no
     config.json -- e.g. a lights/shape panel) or the subject's stim_path
     isn't under opdat/ at all.
     """
-    sshProcess = ssh_magpi(server=server, is_magpi=is_magpi)
     remote_config = "{}{}/config.json".format(OPDAT_ROOT, subj)
-    sshProcess.stdin.write("cat {}\n".format(remote_config))
-    sshProcess.stdin.close()
+    ssh_opts = ["-o", "ConnectTimeout={}".format(timeout), "-T"]
+    if is_magpi:
+        cmd = ["ssh"] + ssh_opts + [server, "cat", remote_config]
+    else:
+        cmd = ["ssh"] + ssh_opts + ["bird@magpi", "ssh"] + ssh_opts + [server, "cat", remote_config]
 
-    out = sshProcess.stdout.read()
-    sshProcess.stderr.read()
-    returncode = sshProcess.wait()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
+    except subprocess.TimeoutExpired:
+        return None
 
-    if returncode != 0 or not out.strip():
+    if result.returncode != 0 or not result.stdout.strip():
         return None
     try:
-        config = json.loads(out)
+        config = json.loads(result.stdout)
     except json.JSONDecodeError:
         return None
 
