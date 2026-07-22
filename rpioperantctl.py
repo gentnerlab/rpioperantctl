@@ -129,9 +129,19 @@ def get_stim_exclude(server, subj, is_magpi=False, timeout=5):
     """SSH into a panel and read its subject's config.json to resolve the
     real stim_path (explicit, or pyoperant's own default of
     <experiment_path>/stims -- see pyoperant.behavior.base.BaseExp.__init__),
-    returning it as a path relative to opdat/'s root for allsummary.py to
-    use as an exact rsync --exclude, rather than allsummary.py having to
-    guess from directory names or do its own SSH round-trip per box.
+    returning it as a path relative to this subject's own opdat/<subj>/
+    folder for allsummary.py to use as an exact rsync --exclude, rather
+    than allsummary.py having to guess from directory names or do its own
+    SSH round-trip per box.
+
+    allsummary.py's rsync source for each box is narrowed to just its
+    active subject's own folder (bird@box:/home/bird/opdat/<subj>/), not
+    the box's whole opdat/ tree -- a box accumulates folders for every
+    subject that's ever run there, not just the currently-configured one,
+    and pulling the whole tree pulled all of that orphaned data (and any
+    box-level shared stim dirs) too. So a stim_path outside this subject's
+    own folder is already outside the rsync's scope and needs no exclude;
+    only a stim_path *nested inside* it needs one.
 
     Runs the remote `cat` as an explicit ssh argv command (not via
     ssh_magpi()'s interactive-shell stdin-write pattern used elsewhere in
@@ -142,7 +152,7 @@ def get_stim_exclude(server, subj, is_magpi=False, timeout=5):
 
     Returns None if the config can't be read (panel unreachable, no
     config.json -- e.g. a lights/shape panel) or the subject's stim_path
-    isn't under opdat/ at all.
+    isn't nested inside their own opdat/<subj>/ folder.
     """
     remote_config = "{}{}/config.json".format(OPDAT_ROOT, subj)
     ssh_opts = ["-o", "ConnectTimeout={}".format(timeout), "-T"]
@@ -166,9 +176,10 @@ def get_stim_exclude(server, subj, is_magpi=False, timeout=5):
     experiment_path = config.get("experiment_path") or "{}{}".format(OPDAT_ROOT, subj)
     stim_path = config.get("stim_path") or (experiment_path.rstrip("/") + "/stims")
 
-    if stim_path.startswith(OPDAT_ROOT):
-        return "/" + stim_path[len(OPDAT_ROOT):]
-    return None  # stim_path lives outside opdat/, nothing to exclude here
+    experiment_root = "{}{}/".format(OPDAT_ROOT, subj)
+    if stim_path.startswith(experiment_root):
+        return "/" + stim_path[len(experiment_root):]
+    return None  # outside this subject's own folder -- narrowed rsync won't reach it anyway
 
 
 def get_stim_excludes(process_df, is_magpi=False):
